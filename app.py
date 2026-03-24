@@ -3,40 +3,72 @@ import sqlite3
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, date
+import base64
 
 st.set_page_config(page_title="物流作業進捗管理アプリ", layout="wide")
 
 # -------------------------
-# CSS
+# 背景設定
 # -------------------------
-st.markdown("""
-<style>
-html, body, [class*="css"] {
-    font-family: 'Yu Gothic UI', 'Meiryo', sans-serif;
-    color: #333;
-}
-.card {
-    background-color: rgba(255, 255, 255, 0.96);
-    padding: 20px;
-    border-radius: 18px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
-    margin-bottom: 20px;
-}
-h1, h2, h3 {
-    color: #1F4E79;
-}
-section[data-testid="stSidebar"] {
-    background-color: rgba(245,248,252,0.95);
-}
-</style>
-""", unsafe_allow_html=True)
+def set_background(image_file):
+    with open(image_file, "rb") as f:
+        data = base64.b64encode(f.read()).decode()
+
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background-image: url("data:image/png;base64,{data}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.72);
+            z-index: -1;
+        }}
+
+        html, body, [class*="css"] {{
+            font-family: 'Yu Gothic UI', 'Meiryo', sans-serif;
+            color: #333;
+        }}
+
+        .card {{
+            background-color: rgba(255, 255, 255, 0.94);
+            padding: 20px;
+            border-radius: 18px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }}
+
+        h1, h2, h3 {{
+            color: #1F4E79;
+        }}
+
+        section[data-testid="stSidebar"] {{
+            background-color: rgba(245,248,252,0.88);
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
 BASE_DIR = Path(__file__).resolve().parent
-db_path = BASE_DIR / "logistics_tasks.db"
+bg_path = BASE_DIR / "assets" / "background.png"
+
+if bg_path.exists():
+    set_background(str(bg_path))
+else:
+    st.warning(f"背景画像が見つかりません: {bg_path}")
 
 # -------------------------
 # DB接続
 # -------------------------
+db_path = BASE_DIR / "logistics_tasks.db"
 conn = sqlite3.connect(db_path, check_same_thread=False)
 c = conn.cursor()
 
@@ -297,74 +329,6 @@ elif menu == "作業一覧":
         )
 
         st.dataframe(style_task_df(export_df), use_container_width=True)
-
-        st.subheader("作業編集・削除")
-
-        edit_options = [
-            f"{row['id']} | {row['task_name']} | {row['staff']}"
-            for _, row in filtered_df.iterrows()
-        ]
-
-        if edit_options:
-            selected_label = st.selectbox("編集する作業を選択", edit_options)
-            selected_id = int(selected_label.split("|")[0].strip())
-            selected_row = filtered_df[filtered_df["id"] == selected_id].iloc[0]
-
-            with st.form("edit_task_form"):
-                edit_task_name = st.selectbox(
-                    "作業名",
-                    task_names,
-                    index=task_names.index(selected_row["task_name"]) if selected_row["task_name"] in task_names else 0
-                )
-                edit_location = st.selectbox(
-                    "事業所",
-                    locations,
-                    index=locations.index(selected_row["location"]) if selected_row["location"] in locations else 0
-                )
-                edit_staff = st.selectbox(
-                    "担当者",
-                    staff_names,
-                    index=staff_names.index(selected_row["staff"]) if selected_row["staff"] in staff_names else 0
-                )
-                edit_priority = st.selectbox(
-                    "優先度",
-                    priority_options,
-                    index=priority_options.index(selected_row["priority"]) if selected_row["priority"] in priority_options else 0
-                )
-                edit_status = st.selectbox(
-                    "ステータス",
-                    status_options,
-                    index=status_options.index(selected_row["status"]) if selected_row["status"] in status_options else 0
-                )
-                edit_due_date = st.date_input(
-                    "期限",
-                    value=pd.to_datetime(selected_row["due_date"]).date() if pd.notna(selected_row["due_date"]) else date.today()
-                )
-                edit_memo = st.text_area("メモ", value=selected_row["memo"] if pd.notna(selected_row["memo"]) else "")
-
-                submitted = st.form_submit_button("作業を更新")
-                if submitted:
-                    c.execute("""
-                        UPDATE tasks
-                        SET task_name = ?, location = ?, staff = ?, priority = ?, status = ?, due_date = ?, memo = ?
-                        WHERE id = ?
-                    """, (
-                        edit_task_name,
-                        edit_location,
-                        edit_staff,
-                        edit_priority,
-                        edit_status,
-                        str(edit_due_date),
-                        edit_memo,
-                        selected_id
-                    ))
-                    conn.commit()
-                    st.success("作業を更新しました✨")
-
-            if st.button("選択した作業を削除"):
-                c.execute("DELETE FROM tasks WHERE id = ?", (selected_id,))
-                conn.commit()
-                st.success("作業を削除しました。")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
